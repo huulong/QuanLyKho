@@ -49,7 +49,7 @@ namespace QuanLyKho
             btnDangNhap.Text = "Đăng Nhập";
             btnDangNhap.Location = new System.Drawing.Point(100, 120);
             btnDangNhap.Size = new System.Drawing.Size(100, 30);
-            btnDangNhap.Click += (sender, e) => BtnDangNhap_Click();
+            btnDangNhap.Click += (sender, e) => btnDangNhap_Click(sender, e);
             this.Controls.Add(btnDangNhap);
 
             // Nút Đăng Ký
@@ -66,7 +66,7 @@ namespace QuanLyKho
             this.StartPosition = FormStartPosition.CenterScreen;
         }
 
-        private string MaHoaMatKhau(string matKhau)
+        private string HashPassword(string matKhau)
         {
             using (SHA256 sha256 = SHA256.Create())
             {
@@ -83,81 +83,94 @@ namespace QuanLyKho
             }
         }
 
-        private async void BtnDangNhap_Click()
+        private async void btnDangNhap_Click(object sender, EventArgs e)
         {
-            // Lấy các giá trị từ TextBox
-            TextBox? txtTenDangNhap = this.Controls["txtTenDangNhap"] as TextBox;
-            TextBox? txtMatKhau = this.Controls["txtMatKhau"] as TextBox;
+            string taiKhoan = ((TextBox)this.Controls["txtTenDangNhap"]).Text.Trim();
+            string matKhau = ((TextBox)this.Controls["txtMatKhau"]).Text;
 
-            if (txtTenDangNhap == null || txtMatKhau == null)
+            if (string.IsNullOrEmpty(taiKhoan) || string.IsNullOrEmpty(matKhau))
             {
-                MessageBox.Show("Không tìm thấy điều khiển.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Vui lòng nhập đầy đủ tài khoản và mật khẩu!", "Thông báo", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            // Vô hiệu hóa nút đăng nhập để tránh click nhiều lần
-            Button? btnDangNhap = this.Controls.OfType<Button>().FirstOrDefault(b => b.Text == "Đăng Nhập");
-            if (btnDangNhap != null) btnDangNhap.Enabled = false;
+            ((Button)sender).Enabled = false;
+            this.UseWaitCursor = true;
 
             try
             {
-                // Thực hiện đăng nhập không đồng bộ
-                (bool success, string? tenNhanVien) = await XacThucDangNhapAsync(txtTenDangNhap.Text, txtMatKhau.Text);
+                var (success, tenNhanVien, maNV) = await XacThucDangNhapAsync(taiKhoan, matKhau);
 
                 if (success)
                 {
-                    // Không hiển thị MessageBox, chuyển thẳng sang form chính
-                    TrangChuForm trangChuForm = new TrangChuForm(tenNhanVien);
-                    trangChuForm.Show();
+                    // Debug: Hiển thị thông tin đăng nhập
+                    MessageBox.Show($"Đăng nhập thành công!\nTên NV: {tenNhanVien}\nMã NV: {maNV}", "Debug Info");
+                    
+                    TrangChuForm trangChuForm = new TrangChuForm(tenNhanVien, maNV);
                     this.Hide();
+                    trangChuForm.ShowDialog();
+                    this.Close();
                 }
                 else
                 {
-                    MessageBox.Show("Tên đăng nhập hoặc mật khẩu không chính xác.", 
-                        "Lỗi Đăng Nhập", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("Tài khoản hoặc mật khẩu không đúng!", "Lỗi đăng nhập", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Lỗi: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
-                // Kích hoạt lại nút đăng nhập
-                if (btnDangNhap != null) btnDangNhap.Enabled = true;
+                ((Button)sender).Enabled = true;
+                this.UseWaitCursor = false;
             }
         }
 
-        private async Task<(bool Success, string? TenNhanVien)> XacThucDangNhapAsync(string tenDangNhap, string matKhau)
+        private async Task<(bool success, string? tenNhanVien, int maNV)> XacThucDangNhapAsync(string taiKhoan, string matKhau)
         {
-            // Mã hóa mật khẩu trước khi so sánh
-            string hashedPassword = MaHoaMatKhau(matKhau);
-
-            using (SqlConnection connection = DatabaseConnection.GetConnection())
+            try
             {
-                // Truy vấn kiểm tra tài khoản và mật khẩu
-                string query = @"
-                    SELECT TOP 1 TenNV 
-                    FROM TT_Nhan_Vien NV
-                    JOIN Tai_Khoan TK ON NV.MaNV = TK.MaNV
-                    WHERE TK.TK = @TenDangNhap AND TK.MatKhau = @MatKhau";
+                string hashedPassword = HashPassword(matKhau);
+                bool success = false;
+                string? tenNhanVien = null;
+                int maNV = 0;
 
-                using (SqlCommand command = new SqlCommand(query, connection))
+                await Task.Run(() =>
                 {
-                    command.Parameters.AddWithValue("@TenDangNhap", tenDangNhap);
-                    command.Parameters.AddWithValue("@MatKhau", hashedPassword);
-
-                    // Thực thi bất đồng bộ
-                    using (SqlDataReader reader = await command.ExecuteReaderAsync())
+                    using (var connection = DatabaseConnection.CreateNewConnection())
                     {
-                        if (await reader.ReadAsync())
+                        string query = @"
+                            SELECT nv.TenNV, nv.MaNV
+                            FROM [dbo].[Tai_Khoan] tk
+                            JOIN [dbo].[TT_Nhan_Vien] nv ON tk.MaNV = nv.MaNV
+                            WHERE tk.TK = @TaiKhoan AND tk.MatKhau = @MatKhau";
+
+                        using (var command = new SqlCommand(query, connection))
                         {
-                            string? tenNhanVien = reader["TenNV"]?.ToString();
-                            return (true, tenNhanVien);
+                            command.Parameters.AddWithValue("@TaiKhoan", taiKhoan);
+                            command.Parameters.AddWithValue("@MatKhau", hashedPassword);
+
+                            using (var reader = command.ExecuteReader())
+                            {
+                                if (reader.Read())
+                                {
+                                    success = true;
+                                    tenNhanVien = reader.GetString(0);
+                                    maNV = reader.GetInt32(1);
+                                }
+                            }
                         }
-                        return (false, null);
                     }
-                }
+                });
+
+                return (success, tenNhanVien, maNV);
+            }
+            catch (Exception)
+            {
+                throw;
             }
         }
 

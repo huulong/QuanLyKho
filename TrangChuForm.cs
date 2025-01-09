@@ -10,6 +10,7 @@ namespace QuanLyKho
     public partial class TrangChuForm : Form
     {
         private readonly string _tenNhanVien;
+        private readonly int _maNV;
 
         // Lớp hỗ trợ để quản lý thông tin menu
         private class MenuItemInfo
@@ -28,9 +29,10 @@ namespace QuanLyKho
             }
         }
 
-        public TrangChuForm(string? tenNhanVien)
+        public TrangChuForm(string? tenNhanVien, int maNV)
         {
             _tenNhanVien = tenNhanVien ?? "Nhân Viên";
+            _maNV = maNV;
             InitializeComponent();
             ConfigureForm();
         }
@@ -59,6 +61,17 @@ namespace QuanLyKho
             Name = "TrangChuForm";
             Text = $"Quản Lý Kho - {_tenNhanVien}";
             
+            // Thêm nút Quản lý người dùng
+            Button btnQuanLyNguoiDung = new Button
+            {
+                Text = "Quản Lý\nNgười Dùng",
+                Size = new Size(100, 50),
+                Location = new Point(20, 420), 
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            btnQuanLyNguoiDung.Click += BtnQuanLyNguoiDung_Click;
+            this.Controls.Add(btnQuanLyNguoiDung);
+
             ResumeLayout(false);
         }
 
@@ -137,71 +150,48 @@ namespace QuanLyKho
         private static List<(string label, int value, Color color)> GetWarehouseStatistics()
         {
             var stats = new List<(string, int, Color)>();
-            SqlConnection connection = null;
-
             try
             {
-                // Tạo kết nối
-                connection = DatabaseConnection.GetConnection();
-                
-                // Mở kết nối một cách rõ ràng
-                if (connection.State != System.Data.ConnectionState.Open)
+                using (var connection = DatabaseConnection.GetConnection())
                 {
                     connection.Open();
-                }
-
-                // Log thông tin chi tiết về kết nối trước khi thực hiện truy vấn
-                System.Diagnostics.Debug.WriteLine($"Connection State: {connection.State}");
-                System.Diagnostics.Debug.WriteLine($"Connection String: {connection.ConnectionString}");
-                System.Diagnostics.Debug.WriteLine($"Database: {connection.Database}");
-                System.Diagnostics.Debug.WriteLine($"Data Source: {connection.DataSource}");
-
-                var queries = new[]
-                {
-                    "SELECT COUNT(*) FROM [dbo].[VatTu]",
-                    "SELECT COUNT(*) FROM [dbo].[Phieu_Nhap] WHERE MONTH(NgayNhapHang) = MONTH(GETDATE()) AND YEAR(NgayNhapHang) = YEAR(GETDATE())",
-                    "SELECT COUNT(*) FROM [dbo].[Phieu_Xuat] WHERE MONTH(NgayXuatHang) = MONTH(GETDATE()) AND YEAR(NgayXuatHang) = YEAR(GETDATE())"
-                };
-
-                var labels = new[] 
-                { 
-                    "Tổng Vật Tư", 
-                    "Phiếu Nhập Tháng", 
-                    "Phiếu Xuất Tháng" 
-                };
-
-                var colors = new[]
-                {
-                    Color.FromArgb(33, 150, 243),
-                    Color.FromArgb(76, 175, 80),
-                    Color.FromArgb(255, 152, 0)
-                };
-
-                for (int i = 0; i < queries.Length; i++)
-                {
-                    try
+                    var queries = new[]
                     {
-                        using (var cmd = new SqlCommand(queries[i], connection))
+                        "SELECT COUNT(*) FROM [dbo].[VatTu]",
+                        "SELECT COUNT(*) FROM [dbo].[Phieu_Nhap] WHERE MONTH(NgayNhapHang) = MONTH(GETDATE()) AND YEAR(NgayNhapHang) = YEAR(GETDATE())",
+                        "SELECT COUNT(*) FROM [dbo].[Phieu_Xuat] WHERE MONTH(NgayXuatHang) = MONTH(GETDATE()) AND YEAR(NgayXuatHang) = YEAR(GETDATE())"
+                    };
+
+                    var labels = new[] 
+                    { 
+                        "Tổng Vật Tư", 
+                        "Phiếu Nhập Tháng", 
+                        "Phiếu Xuất Tháng" 
+                    };
+
+                    var colors = new[]
+                    {
+                        Color.FromArgb(33, 150, 243),
+                        Color.FromArgb(76, 175, 80),
+                        Color.FromArgb(255, 152, 0)
+                    };
+
+                    for (int i = 0; i < queries.Length; i++)
+                    {
+                        try
                         {
-                            // Đặt timeout cho từng truy vấn
-                            cmd.CommandTimeout = 30; // 30 giây
-
-                            // Log chi tiết truy vấn
-                            System.Diagnostics.Debug.WriteLine($"Executing query: {queries[i]}");
-                            System.Diagnostics.Debug.WriteLine($"Connection State before ExecuteScalar: {connection.State}");
-                            
-                            var value = Convert.ToInt32(cmd.ExecuteScalar());
-                            
-                            System.Diagnostics.Debug.WriteLine($"Query result for {labels[i]}: {value}");
-                            System.Diagnostics.Debug.WriteLine($"Connection State after ExecuteScalar: {connection.State}");
-                            
-                            stats.Add((labels[i], value, colors[i]));
+                            using (var cmd = new SqlCommand(queries[i], connection))
+                            {
+                                cmd.CommandTimeout = 30; // 30 giây
+                                var value = Convert.ToInt32(cmd.ExecuteScalar());
+                                stats.Add((labels[i], value, colors[i]));
+                            }
                         }
-                    }
-                    catch (SqlException sqlEx)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"SQL Error in query {labels[i]}: {sqlEx.Message}");
-                        stats.Add((labels[i], 0, colors[i]));
+                        catch (SqlException sqlEx)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"SQL Error in query {labels[i]}: {sqlEx.Message}");
+                            stats.Add((labels[i], 0, colors[i]));
+                        }
                     }
                 }
             }
@@ -215,72 +205,7 @@ namespace QuanLyKho
                     ("Phiếu Xuất Tháng", 0, Color.FromArgb(255, 152, 0))
                 };
             }
-            finally
-            {
-                // Đảm bảo kết nối luôn được đóng
-                if (connection != null)
-                {
-                    try 
-                    {
-                        if (connection.State != System.Data.ConnectionState.Closed)
-                        {
-                            connection.Close();
-                        }
-                        connection.Dispose();
-                    }
-                    catch (Exception closeEx)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"Lỗi khi đóng kết nối: {closeEx.Message}");
-                    }
-                }
-            }
-
             return stats;
-        }
-
-        // Phương thức hỗ trợ: Ghi log thông tin kết nối
-        private static void LogConnectionDetails(SqlConnection connection)
-        {
-            System.Diagnostics.Debug.WriteLine($"Connection String: {connection.ConnectionString}");
-            System.Diagnostics.Debug.WriteLine($"Database: {connection.Database}");
-            System.Diagnostics.Debug.WriteLine($"Data Source: {connection.DataSource}");
-        }
-
-        // Phương thức hỗ trợ: Ghi log chi tiết truy vấn
-        private static void LogQueryDetails(string query, string label)
-        {
-            System.Diagnostics.Debug.WriteLine($"Executing query for {label}: {query}");
-        }
-
-        // Phương thức hỗ trợ: Thực thi truy vấn với ghi log
-        private static int ExecuteScalarWithLogging(SqlCommand cmd, string label)
-        {
-            int value = Convert.ToInt32(cmd.ExecuteScalar());
-            System.Diagnostics.Debug.WriteLine($"Query result for {label}: {value}");
-            return value;
-        }
-
-        // Phương thức hỗ trợ: Ghi log lỗi SQL
-        private static void LogSqlError(string label, SqlException sqlEx)
-        {
-            System.Diagnostics.Debug.WriteLine($"SQL Error in query {label}: {sqlEx.Message}");
-        }
-
-        // Phương thức hỗ trợ: Ghi log lỗi chung
-        private static void LogGeneralError(Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Lỗi khi lấy thống kê: {ex.Message}");
-        }
-
-        // Phương thức hỗ trợ: Tạo danh sách thống kê mặc định
-        private static List<(string, int, Color)> CreateDefaultStats()
-        {
-            return new List<(string, int, Color)>
-            {
-                ("Tổng Vật Tư", 0, Color.FromArgb(33, 150, 243)),
-                ("Phiếu Nhập Tháng", 0, Color.FromArgb(76, 175, 80)),
-                ("Phiếu Xuất Tháng", 0, Color.FromArgb(255, 152, 0))
-            };
         }
 
         private Panel CreateHeaderPanel()
@@ -292,7 +217,7 @@ namespace QuanLyKho
                 Dock = DockStyle.Fill
             };
 
-            // Logo (placeholder)
+            // Logo
             PictureBox logoPictureBox = new PictureBox
             {
                 SizeMode = PictureBoxSizeMode.Zoom,
@@ -301,6 +226,7 @@ namespace QuanLyKho
                 BackColor = Color.Transparent,
                 Image = CreatePlaceholderLogo()
             };
+            panel.Controls.Add(logoPictureBox);
 
             // Tên người dùng
             Label lblUserName = new Label
@@ -312,6 +238,7 @@ namespace QuanLyKho
                 AutoSize = true,
                 BackColor = Color.Transparent
             };
+            panel.Controls.Add(lblUserName);
 
             // Thời gian
             Label lblDateTime = new Label
@@ -323,6 +250,64 @@ namespace QuanLyKho
                 AutoSize = true,
                 BackColor = Color.Transparent
             };
+            panel.Controls.Add(lblDateTime);
+
+            // Timer để cập nhật thởi gian
+            System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer
+            {
+                Interval = 1000
+            };
+            timer.Tick += (sender, e) =>
+            {
+                lblDateTime.Text = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+            };
+            timer.Start();
+
+            // Báo cáo buttons
+            var btnThongKe = new Button
+            {
+                Text = "Thống Kê Nhập/Xuất",
+                Size = new Size(150, 40),
+                Location = new Point(650, 20),
+                BackColor = Color.White,
+                ForeColor = Color.FromArgb(33, 150, 243),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Cursor = Cursors.Hand
+            };
+            btnThongKe.FlatAppearance.BorderSize = 0;
+            btnThongKe.Click += BtnThongKeNhapXuat_Click;
+            panel.Controls.Add(btnThongKe);
+
+            var btnTonKho = new Button
+            {
+                Text = "Báo Cáo Tồn Kho",
+                Size = new Size(150, 40),
+                Location = new Point(810, 20),
+                BackColor = Color.White,
+                ForeColor = Color.FromArgb(33, 150, 243),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Cursor = Cursors.Hand
+            };
+            btnTonKho.FlatAppearance.BorderSize = 0;
+            btnTonKho.Click += BtnBaoCaoTonKho_Click;
+            panel.Controls.Add(btnTonKho);
+
+            var btnDoanhThu = new Button
+            {
+                Text = "Báo Cáo Doanh Thu",
+                Size = new Size(150, 40),
+                Location = new Point(970, 20),
+                BackColor = Color.White,
+                ForeColor = Color.FromArgb(33, 150, 243),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Cursor = Cursors.Hand
+            };
+            btnDoanhThu.FlatAppearance.BorderSize = 0;
+            btnDoanhThu.Click += BtnBaoCaoDoanhThu_Click;
+            panel.Controls.Add(btnDoanhThu);
 
             // Nút đăng xuất
             Button btnLogout = new Button
@@ -333,29 +318,12 @@ namespace QuanLyKho
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Segoe UI", 10, FontStyle.Bold),
                 Size = new Size(120, 40),
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                Location = new Point(panel.Width - 130, 20)
+                Location = new Point(1130, 20),
+                Cursor = Cursors.Hand
             };
             btnLogout.FlatAppearance.BorderSize = 0;
             btnLogout.Click += BtnDangXuat_Click;
-
-            // Timer để cập nhật thởi gian liên tục
-            System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer
-            {
-                Interval = 1000 // Cứ 1 giây cập nhật một lần
-            };
-            timer.Tick += (sender, e) => 
-            {
-                lblDateTime.Text = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
-            };
-            timer.Start();
-
-            panel.Controls.AddRange(new Control[] { 
-                logoPictureBox, 
-                lblUserName, 
-                lblDateTime, 
-                btnLogout 
-            });
+            panel.Controls.Add(btnLogout);
 
             return panel;
         }
@@ -542,40 +510,303 @@ namespace QuanLyKho
             quanLyHangHoaForm.Show();
         }
 
-        private void BtnQuanLyNhaCungCap_Click(object? sender, EventArgs e)
+        private void BtnQuanLyNhaCungCap_Click(object sender, EventArgs e)
         {
-            // Tạo form quản lý nhà cung cấp
-            Form quanLyNhaCungCapForm = new Form();
-            quanLyNhaCungCapForm.Text = "Quản Lý Nhà Cung Cấp";
-            quanLyNhaCungCapForm.Size = new Size(800, 600);
-            quanLyNhaCungCapForm.StartPosition = FormStartPosition.CenterScreen;
-            
-            // TODO: Thêm DataGridView để hiển thị danh sách nhà cung cấp
-            MessageBox.Show("Chức năng đang phát triển", "Thông Báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            var nhaCungCapForm = new NhaCungCapForm();
+            nhaCungCapForm.ShowDialog();
         }
 
-        private void BtnQuanLyPhieuNhap_Click(object? sender, EventArgs e)
+        private void BtnQuanLyPhieuNhap_Click(object sender, EventArgs e)
         {
-            // Tạo form quản lý phiếu nhập
-            Form quanLyPhieuNhapForm = new Form();
-            quanLyPhieuNhapForm.Text = "Quản Lý Phiếu Nhập";
-            quanLyPhieuNhapForm.Size = new Size(1000, 600);
-            quanLyPhieuNhapForm.StartPosition = FormStartPosition.CenterScreen;
-            
-            // TODO: Thêm DataGridView để hiển thị danh sách phiếu nhập
-            MessageBox.Show("Chức năng đang phát triển", "Thông Báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            var phieuNhapForm = new PhieuNhapForm(_maNV);
+            phieuNhapForm.ShowDialog();
         }
 
-        private void BtnQuanLyPhieuXuat_Click(object? sender, EventArgs e)
+        private void BtnQuanLyPhieuXuat_Click(object sender, EventArgs e)
         {
-            // Tạo form quản lý phiếu xuất
-            Form quanLyPhieuXuatForm = new Form();
-            quanLyPhieuXuatForm.Text = "Quản Lý Phiếu Xuất";
-            quanLyPhieuXuatForm.Size = new Size(1000, 600);
-            quanLyPhieuXuatForm.StartPosition = FormStartPosition.CenterScreen;
-            
-            // TODO: Thêm DataGridView để hiển thị danh sách phiếu xuất
-            MessageBox.Show("Chức năng đang phát triển", "Thông Báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            var phieuXuatForm = new PhieuXuatForm(_maNV);
+            phieuXuatForm.ShowDialog();
+        }
+
+        private void BtnThongKeNhapXuat_Click(object sender, EventArgs e)
+        {
+            var startDate = DateTime.Now.AddMonths(-1);
+            var endDate = DateTime.Now;
+
+            try
+            {
+                DatabaseConnection.ExecuteInTransaction((connection, transaction) =>
+                {
+                    var query = @"
+                        WITH ThongKeNhap AS (
+                            SELECT 
+                                COUNT(DISTINCT MaPhieuNhap) as SoLuongPhieu,
+                                SUM(SoLuong) as TongSoLuong,
+                                SUM(ThanhTien) as TongGiaTri
+                            FROM Phieu_Nhap
+                            WHERE NgayNhapHang BETWEEN @StartDate AND @EndDate
+                        ),
+                        ThongKeXuat AS (
+                            SELECT 
+                                COUNT(DISTINCT MaPhieuXuat) as SoLuongPhieu,
+                                SUM(SoLuong) as TongSoLuong,
+                                SUM(ThanhTien) as TongGiaTri
+                            FROM Phieu_Xuat
+                            WHERE NgayXuatHang BETWEEN @StartDate AND @EndDate
+                        )
+                        SELECT 
+                            'Nhập' as LoaiPhieu,
+                            ISNULL(SoLuongPhieu, 0) as SoLuongPhieu,
+                            ISNULL(TongSoLuong, 0) as TongSoLuong,
+                            ISNULL(TongGiaTri, 0) as TongGiaTri
+                        FROM ThongKeNhap
+                        UNION ALL
+                        SELECT 
+                            'Xuất' as LoaiPhieu,
+                            ISNULL(SoLuongPhieu, 0) as SoLuongPhieu,
+                            ISNULL(TongSoLuong, 0) as TongSoLuong,
+                            ISNULL(TongGiaTri, 0) as TongGiaTri
+                        FROM ThongKeXuat";
+
+                    using (var command = new SqlCommand(query, connection))
+                    {
+                        command.Transaction = transaction;
+                        command.Parameters.AddWithValue("@StartDate", startDate);
+                        command.Parameters.AddWithValue("@EndDate", endDate);
+
+                        using (var reader = command.ExecuteReader())
+                        {
+                            string message = $"Thống kê từ {startDate:dd/MM/yyyy} đến {endDate:dd/MM/yyyy}\n\n";
+                            while (reader.Read())
+                            {
+                                string loaiPhieu = reader["LoaiPhieu"].ToString();
+                                int soLuongPhieu = Convert.ToInt32(reader["SoLuongPhieu"]);
+                                int tongSoLuong = Convert.ToInt32(reader["TongSoLuong"]);
+                                decimal tongGiaTri = Convert.ToDecimal(reader["TongGiaTri"]);
+
+                                message += $"Phiếu {loaiPhieu}:\n";
+                                message += $"- Số lượng phiếu: {soLuongPhieu:N0}\n";
+                                message += $"- Tổng số lượng: {tongSoLuong:N0}\n";
+                                message += $"- Tổng giá trị: {tongGiaTri:N0} VNĐ\n\n";
+                            }
+                            MessageBox.Show(message, "Thống Kê Nhập/Xuất", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi khi lấy thống kê: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void BtnBaoCaoTonKho_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                DatabaseConnection.ExecuteInTransaction((connection, transaction) =>
+                {
+                    var query = @"
+                        WITH TongNhap AS (
+                            SELECT 
+                                MaVatTu,
+                                SUM(SoLuong) as SoLuongNhap
+                            FROM Phieu_Nhap
+                            GROUP BY MaVatTu
+                        ),
+                        TongXuat AS (
+                            SELECT 
+                                MaVatTu,
+                                SUM(SoLuong) as SoLuongXuat
+                            FROM Phieu_Xuat
+                            GROUP BY MaVatTu
+                        )
+                        SELECT 
+                            v.TenVT,
+                            dvt.TenDVT,
+                            ncc.TenNCC,
+                            ISNULL(tn.SoLuongNhap, 0) as TongNhap,
+                            ISNULL(tx.SoLuongXuat, 0) as TongXuat,
+                            ISNULL(tn.SoLuongNhap, 0) - ISNULL(tx.SoLuongXuat, 0) as TonKho
+                        FROM VatTu v
+                        LEFT JOIN Don_Vi_Tinh dvt ON v.MaDVT = dvt.MaDVT
+                        LEFT JOIN Nha_Cung_Cap ncc ON v.MaNCC = ncc.MaNCC
+                        LEFT JOIN TongNhap tn ON v.MaVatTu = tn.MaVatTu
+                        LEFT JOIN TongXuat tx ON v.MaVatTu = tx.MaVatTu
+                        ORDER BY v.TenVT";
+
+                    using (var command = new SqlCommand(query, connection))
+                    {
+                        command.Transaction = transaction;
+                        using (var reader = command.ExecuteReader())
+                        {
+                            string message = "Báo Cáo Tồn Kho\n\n";
+                            while (reader.Read())
+                            {
+                                string tenVT = reader["TenVT"].ToString();
+                                string dvt = reader["TenDVT"].ToString();
+                                string ncc = reader["TenNCC"].ToString();
+                                int tongNhap = Convert.ToInt32(reader["TongNhap"]);
+                                int tongXuat = Convert.ToInt32(reader["TongXuat"]);
+                                int tonKho = Convert.ToInt32(reader["TonKho"]);
+
+                                message += $"{tenVT}:\n";
+                                message += $"- Đơn vị tính: {dvt}\n";
+                                message += $"- Nhà cung cấp: {ncc}\n";
+                                message += $"- Tổng nhập: {tongNhap:N0}\n";
+                                message += $"- Tổng xuất: {tongXuat:N0}\n";
+                                message += $"- Tồn kho: {tonKho:N0}\n\n";
+                            }
+                            MessageBox.Show(message, "Báo Cáo Tồn Kho", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi khi lấy báo cáo: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void BtnBaoCaoDoanhThu_Click(object sender, EventArgs e)
+        {
+            var startDate = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
+            var endDate = startDate.AddMonths(1).AddDays(-1);
+
+            try
+            {
+                DatabaseConnection.ExecuteInTransaction((connection, transaction) =>
+                {
+                    var query = @"
+                        WITH DoanhThuNgay AS (
+                            SELECT 
+                                NgayXuatHang,
+                                COUNT(DISTINCT MaPhieuXuat) as SoPhieuXuat,
+                                SUM(SoLuong) as TongSoLuong,
+                                SUM(ThanhTien) as DoanhThu
+                            FROM Phieu_Xuat
+                            WHERE NgayXuatHang BETWEEN @StartDate AND @EndDate
+                            GROUP BY NgayXuatHang
+                        )
+                        SELECT 
+                            FORMAT(NgayXuatHang, 'dd/MM/yyyy') as NgayXuat,
+                            SoPhieuXuat,
+                            TongSoLuong,
+                            DoanhThu,
+                            SUM(DoanhThu) OVER (ORDER BY NgayXuatHang) as DoanhThuLuyKe
+                        FROM DoanhThuNgay
+                        ORDER BY NgayXuatHang";
+
+                    using (var command = new SqlCommand(query, connection))
+                    {
+                        command.Transaction = transaction;
+                        command.Parameters.AddWithValue("@StartDate", startDate);
+                        command.Parameters.AddWithValue("@EndDate", endDate);
+
+                        using (var reader = command.ExecuteReader())
+                        {
+                            string message = $"Báo Cáo Doanh Thu Tháng {startDate:MM/yyyy}\n\n";
+                            decimal tongDoanhThu = 0;
+
+                            while (reader.Read())
+                            {
+                                string ngayXuat = reader["NgayXuat"].ToString();
+                                int soPhieuXuat = Convert.ToInt32(reader["SoPhieuXuat"]);
+                                int tongSoLuong = Convert.ToInt32(reader["TongSoLuong"]);
+                                decimal doanhThu = Convert.ToDecimal(reader["DoanhThu"]);
+                                decimal doanhThuLuyKe = Convert.ToDecimal(reader["DoanhThuLuyKe"]);
+                                tongDoanhThu += doanhThu;
+
+                                message += $"Ngày {ngayXuat}:\n";
+                                message += $"- Số phiếu xuất: {soPhieuXuat:N0}\n";
+                                message += $"- Tổng số lượng: {tongSoLuong:N0}\n";
+                                message += $"- Doanh thu: {doanhThu:N0} VNĐ\n";
+                                message += $"- Doanh thu lũy kế: {doanhThuLuyKe:N0} VNĐ\n\n";
+                            }
+
+                            message += $"Tổng doanh thu tháng: {tongDoanhThu:N0} VNĐ";
+                            MessageBox.Show(message, "Báo Cáo Doanh Thu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi khi lấy báo cáo: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void BtnQuanLyNguoiDung_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                bool isAdmin = false;
+                using (var connection = DatabaseConnection.CreateNewConnection())
+                {
+                    // Debug: Kiểm tra chi tiết quyền
+                    string debugQuery = @"
+                        SELECT pq.MaNV, pq.MaQuyen, qh.TenQuyen, qh.MoTa,
+                               LEN(qh.TenQuyen) as Length,
+                               CONCAT('|', qh.TenQuyen, '|') as ExactValue
+                        FROM [dbo].[Phan_Quyen] pq
+                        JOIN [dbo].[Quyen_Han] qh ON pq.MaQuyen = qh.MaQuyen
+                        WHERE pq.MaNV = @MaNV";
+
+                    using (var debugCmd = new SqlCommand(debugQuery, connection))
+                    {
+                        debugCmd.Parameters.AddWithValue("@MaNV", _maNV);
+                        using (var reader = debugCmd.ExecuteReader())
+                        {
+                            string debugInfo = "";
+                            while (reader.Read())
+                            {
+                                debugInfo += $"\nMaNV: {reader["MaNV"]}, " +
+                                           $"MaQuyen: {reader["MaQuyen"]}, " +
+                                           $"TenQuyen: {reader["ExactValue"]}, " +
+                                           $"Length: {reader["Length"]}, " +
+                                           $"MoTa: {reader["MoTa"]}";
+                            }
+                            MessageBox.Show($"Debug Details:{debugInfo}", "Debug Details");
+                        }
+                    }
+
+                    // Kiểm tra quyền ADMIN
+                    string query = @"
+                        SELECT COUNT(1)
+                        FROM [dbo].[Phan_Quyen] pq
+                        JOIN [dbo].[Quyen_Han] qh ON pq.MaQuyen = qh.MaQuyen
+                        WHERE pq.MaNV = @MaNV 
+                        AND TRIM(qh.TenQuyen) = 'ADMIN'";
+
+                    using (var command = new SqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@MaNV", _maNV);
+                        int count = (int)command.ExecuteScalar();
+                        isAdmin = count > 0;
+                        
+                        // Debug thông tin query
+                        MessageBox.Show($"Query Debug:\n" +
+                                     $"MaNV: {_maNV} (Type: {_maNV.GetType().Name})\n" +
+                                     $"Count: {count}\n" +
+                                     $"IsAdmin: {isAdmin}", 
+                                     "Query Debug");
+                    }
+                }
+
+                if (!isAdmin)
+                {
+                    MessageBox.Show("Bạn không có quyền truy cập chức năng này!", 
+                        "Từ chối truy cập", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                var quanLyNguoiDungForm = new QuanLyNguoiDungForm();
+                quanLyNguoiDungForm.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi: {ex.Message}\nStack: {ex.StackTrace}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
     }
 }

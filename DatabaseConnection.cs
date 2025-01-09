@@ -8,76 +8,93 @@ namespace QuanLyKho
 {
     public class DatabaseConnection
     {
-        // Đọc connection string từ file cấu hình
-        private static string GetConnectionString()
-        {
-            string connectionString = ConfigurationManager.ConnectionStrings["QuanLyKhoDatabase"]?.ConnectionString;
+        private static readonly string _connectionString;
+        private static readonly object _lock = new object();
+        private static SqlConnection? _sharedConnection;
 
-            // Nếu không có trong file cấu hình, sử dụng giá trị mặc định
-            if (string.IsNullOrEmpty(connectionString))
+        static DatabaseConnection()
+        {
+            string[] connectionStrings = new string[]
             {
-                connectionString = @"Data Source=.\SQLEXPRESS;Initial Catalog=QuanLyKho;Integrated Security=True";
+                ConfigurationManager.ConnectionStrings["QuanLyKhoDatabase"]?.ConnectionString + ";CharSet=utf8",
+                ConfigurationManager.ConnectionStrings["QuanLyKhoDatabase"]?.ConnectionString,
+                @"Data Source=DESKTOP-UQPCGAK\SQLEXPRESS;Initial Catalog=QuanLyKho;Persist Security Info=True;User ID=sa;Password=123;Max Pool Size=200;Min Pool Size=5;Pooling=true"
+            };
+
+            foreach (var connStr in connectionStrings.Where(cs => !string.IsNullOrEmpty(cs)))
+            {
+                try
+                {
+                    using (var testConnection = new SqlConnection(connStr))
+                    {
+                        testConnection.Open();
+                        _connectionString = connStr;
+                        return;
+                    }
+                }
+                catch
+                {
+                    continue;
+                }
             }
 
-            return connectionString;
+            throw new Exception("Không thể thiết lập kết nối đến database. Vui lòng kiểm tra cấu hình.");
         }
 
         public static SqlConnection GetConnection()
         {
-            string[] connectionStrings = new string[]
+            if (_sharedConnection == null)
             {
-                 ConfigurationManager.ConnectionStrings["QuanLyKhoDatabase"]?.ConnectionString + ";CharSet=utf8",
-                // Thử các connection string khác nhau
-                ConfigurationManager.ConnectionStrings["QuanLyKhoDatabase"]?.ConnectionString,
-                @"Data Source=LAPTOP-CU2R9HHH\SQLEXPRESS01;Initial Catalog=QuanLyKho;Persist Security Info=True;User ID=sa;Password=123456;"
-            };
-
-            foreach (var connectionString in connectionStrings.Where(cs => !string.IsNullOrEmpty(cs)))
-            {
-                try
+                lock (_lock)
                 {
-                    SqlConnection connection = new SqlConnection(connectionString);
-                    connection.Open();
-
-                    // Kiểm tra kết nối và database
-                    using (SqlCommand cmd = new SqlCommand("SELECT DB_NAME()", connection))
+                    if (_sharedConnection == null)
                     {
-                        string currentDatabase = cmd.ExecuteScalar()?.ToString();
-                        Console.WriteLine($"Kết nối thành công đến database: {currentDatabase}");
+                        _sharedConnection = new SqlConnection(_connectionString);
                     }
-
-                    return connection;
-                }
-                catch (SqlException ex)
-                {
-                    // Log chi tiết lỗi
-                    Console.WriteLine($"Lỗi kết nối: {ex.Message}");
-                    Console.WriteLine($"Mã lỗi: {ex.Number}");
-                    Console.WriteLine($"Thử connection string: {connectionString}");
-
-                    // Các mã lỗi phổ biến
-                    switch (ex.Number)
-                    {
-                        case 4060: // Không thể mở database
-                            Console.WriteLine("Lỗi: Không thể mở database. Kiểm tra tên database.");
-                            break;
-                        case 18456: // Lỗi đăng nhập
-                            Console.WriteLine("Lỗi: Đăng nhập không thành công. Kiểm tra tài khoản và mật khẩu.");
-                            break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Lỗi không xác định: {ex.Message}");
                 }
             }
 
-            throw new Exception("Không thể kết nối đến cơ sở dữ liệu sau nhiều lần thử.");
+            if (_sharedConnection.State != ConnectionState.Open)
+            {
+                lock (_lock)
+                {
+                    if (_sharedConnection.State != ConnectionState.Open)
+                    {
+                        try
+                        {
+                            _sharedConnection.Open();
+                        }
+                        catch (Exception)
+                        {
+                            _sharedConnection.Dispose();
+                            _sharedConnection = new SqlConnection(_connectionString);
+                            _sharedConnection.Open();
+                        }
+                    }
+                }
+            }
+
+            return _sharedConnection;
         }
 
-        public static void CloseConnection(SqlConnection connection)
+        public static SqlConnection CreateNewConnection()
         {
-            if (connection != null)
+            var connection = new SqlConnection(_connectionString);
+            try
+            {
+                connection.Open();
+                return connection;
+            }
+            catch
+            {
+                connection.Dispose();
+                throw;
+            }
+        }
+
+        public static void CloseConnection(SqlConnection? connection)
+        {
+            if (connection != null && connection != _sharedConnection)
             {
                 try
                 {
@@ -90,6 +107,43 @@ namespace QuanLyKho
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Lỗi đóng kết nối: {ex.Message}");
+                }
+            }
+        }
+
+        public static void ExecuteInTransaction(Action<SqlConnection, SqlTransaction> action)
+        {
+            using (var connection = CreateNewConnection())
+            using (var transaction = connection.BeginTransaction())
+            {
+                try
+                {
+                    action(connection, transaction);
+                    transaction.Commit();
+                }
+                catch
+                {
+                    transaction.Rollback();
+                    throw;
+                }
+            }
+        }
+
+        public static T ExecuteInTransaction<T>(Func<SqlConnection, SqlTransaction, T> func)
+        {
+            using (var connection = CreateNewConnection())
+            using (var transaction = connection.BeginTransaction())
+            {
+                try
+                {
+                    var result = func(connection, transaction);
+                    transaction.Commit();
+                    return result;
+                }
+                catch
+                {
+                    transaction.Rollback();
+                    throw;
                 }
             }
         }
