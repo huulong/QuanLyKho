@@ -15,15 +15,27 @@ namespace QuanLyKho
         private readonly Button _btnSua;
         private readonly Button _btnXoa;
         private readonly Button _btnDangXuat;
+        private TextBox txtTimKiem;
+        private Label lblTimKiem;
 
         public QuanLyHangHoaForm()
         {
             _components = new Container();
             _dataGridViewHangHoa = InitializeDataGridView();
-            _btnThem = InitializeButton("Thêm Hàng Hóa", 20, 330, BtnThem_Click);
-            _btnSua = InitializeButton("Sửa Hàng Hóa", 150, 330, BtnSua_Click);
-            _btnXoa = InitializeButton("Xóa Hàng Hóa", 280, 330, BtnXoa_Click);
-            _btnDangXuat = InitializeButton("Đăng Xuất", 500, 330, BtnDangXuat_Click);
+            _btnThem = InitializeButton("Thêm Hàng Hóa", 20, 360, BtnThem_Click);
+            _btnSua = InitializeButton("Sửa Hàng Hóa", 150, 360, BtnSua_Click);
+            _btnXoa = InitializeButton("Xóa Hàng Hóa", 280, 360, BtnXoa_Click);
+            _btnDangXuat = InitializeButton("Đăng Xuất", 500, 360, BtnDangXuat_Click);
+
+            txtTimKiem = new TextBox();
+            txtTimKiem.Location = new Point(20, 330);
+            txtTimKiem.Size = new Size(200, 30);
+            txtTimKiem.TextChanged += TxtTimKiem_TextChanged;
+
+            lblTimKiem = new Label();
+            lblTimKiem.Text = "Tìm kiếm sản phẩm:";
+            lblTimKiem.Location = new Point(20, 300);
+            lblTimKiem.Size = new Size(120, 30);
 
             InitializeComponent();
             LoadDanhSachHangHoa();
@@ -58,7 +70,7 @@ namespace QuanLyKho
         {
             // Cấu hình Form
             Text = "Quản Lý Hàng Hóa";
-            Size = new Size(650, 420);
+            this.ClientSize = new System.Drawing.Size(900, 600); // Thay đổi kích thước cửa sổ
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
@@ -69,6 +81,8 @@ namespace QuanLyKho
             Controls.Add(_btnSua);
             Controls.Add(_btnXoa);
             Controls.Add(_btnDangXuat);
+            Controls.Add(txtTimKiem);
+            Controls.Add(lblTimKiem);
 
             // Gán sự kiện Click
             _btnThem.Click += BtnThem_Click;
@@ -116,6 +130,57 @@ namespace QuanLyKho
                     _dataGridViewHangHoa.Columns["DonViTinh"].HeaderText = "Đơn Vị Tính";
                     _dataGridViewHangHoa.Columns["NhaCungCap"].HeaderText = "Nhà Cung Cấp";
                     _dataGridViewHangHoa.Columns["GhiChu"].HeaderText = "Ghi Chú";
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void TxtTimKiem_TextChanged(object sender, EventArgs e)
+        {
+            string searchText = txtTimKiem.Text.Trim();
+            // Kiểm tra nếu không có giá trị tìm kiếm
+            if (string.IsNullOrEmpty(searchText))
+            {
+                LoadDanhSachHangHoa(); // Tải lại danh sách hàng hóa
+                return;
+            }
+
+            // Câu lệnh SQL để tìm kiếm
+            var query = @"
+                SELECT 
+                    VT.MaVatTu, 
+                    VT.TenVT, 
+                    DVT.TenDVT AS DonViTinh, 
+                    NCC.TenNCC AS NhaCungCap, 
+                    VT.GhiChu
+                FROM 
+                    VatTu VT
+                    INNER JOIN Don_Vi_Tinh DVT ON VT.MaDVT = DVT.MaDVT
+                    INNER JOIN Nha_Cung_Cap NCC ON VT.MaNCC = NCC.MaNCC
+                WHERE VT.MaVatTu LIKE @Search OR VT.TenVT LIKE @Search
+            ";
+
+            try
+            {
+                using (SqlConnection connection = DatabaseConnection.GetConnection())
+                {
+                    using (var cmd = new SqlCommand(query, connection))
+                    {
+                        cmd.Parameters.AddWithValue("@Search", "%" + searchText + "%");
+                        var dt = new DataTable();
+                        dt.Load(cmd.ExecuteReader());
+                        _dataGridViewHangHoa.DataSource = dt; // Cập nhật DataGridView
+
+                        // Đặt tên cột tiếng Việt
+                        _dataGridViewHangHoa.Columns["MaVatTu"].HeaderText = "Mã Vật Tư";
+                        _dataGridViewHangHoa.Columns["TenVT"].HeaderText = "Tên Vật Tư";
+                        _dataGridViewHangHoa.Columns["DonViTinh"].HeaderText = "Đơn Vị Tính";
+                        _dataGridViewHangHoa.Columns["NhaCungCap"].HeaderText = "Nhà Cung Cấp";
+                        _dataGridViewHangHoa.Columns["GhiChu"].HeaderText = "Ghi Chú";
+                    }
                 }
             }
             catch (Exception ex)

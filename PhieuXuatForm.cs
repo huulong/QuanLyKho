@@ -19,6 +19,8 @@ namespace QuanLyKho
         private Button btnLuu;
         private Label lblTongTien;
         private int maNV;
+        private TextBox txtTimKiemMaPhieu;
+        private Label lblTimKiemMaPhieu;
 
         public PhieuXuatForm(int maNV)
         {
@@ -75,6 +77,13 @@ namespace QuanLyKho
             btnLuu = new Button { Text = "Lưu", Location = new Point(100, y), Size = new Size(buttonWidth, 30), Enabled = false };
             
             phieuXuatPanel.Controls.AddRange(new Control[] { btnThem, btnSua, btnXoa, btnLuu });
+
+            // Tìm kiếm
+            y += spacing;
+            lblTimKiemMaPhieu = new Label { Text = "Tìm kiếm mã phiếu:", Location = new Point(10, y), Size = new Size(labelWidth, 20) };
+            txtTimKiemMaPhieu = new TextBox { Location = new Point(110, y), Size = new Size(controlWidth, 25) };
+            txtTimKiemMaPhieu.TextChanged += TxtTimKiem_TextChanged;
+            phieuXuatPanel.Controls.AddRange(new Control[] { lblTimKiemMaPhieu, txtTimKiemMaPhieu });
 
             // DataGridViews
             dgvPhieuXuat = new DataGridView
@@ -349,6 +358,27 @@ namespace QuanLyKho
             btnSua.Enabled = !isEditing;
             btnXoa.Enabled = !isEditing;
             btnLuu.Enabled = isEditing;
+        }
+
+        private void TxtTimKiem_TextChanged(object sender, EventArgs e)
+        {
+            string searchValue = txtTimKiemMaPhieu.Text.Trim();
+
+            using (SqlConnection connection = DatabaseConnection.GetConnection())
+            {
+                string query = @"
+                    SELECT px.MaPhieu, px.NgayXuat, px.GhiChu, px.TongTien
+                    FROM [dbo].[Phieu_Xuat] px
+                    WHERE px.MaPhieu LIKE @SearchValue";
+
+                using (SqlCommand command = new SqlCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@SearchValue", "%" + searchValue + "%");
+                    var dt = new DataTable();
+                    dt.Load(command.ExecuteReader());
+                    dgvPhieuXuat.DataSource = dt;
+                }
+            }
         }
     }
 }

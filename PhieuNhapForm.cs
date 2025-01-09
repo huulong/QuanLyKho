@@ -20,10 +20,16 @@ namespace QuanLyKho
         private Button btnLuu;
         private Label lblTongTien;
         private int maNV;
+        private SqlConnection connection;
+
+        // Thêm các ô nhập liệu cho tìm kiếm
+        private TextBox txtTimKiemMaPhieu;
+        private Label lblTimKiemMaPhieu;
 
         public PhieuNhapForm(int maNV)
         {
             this.maNV = maNV;
+            connection = DatabaseConnection.GetConnection(); // Khởi tạo kết nối
             InitializeComponent();
             LoadData();
             LoadNhaCungCap();
@@ -72,15 +78,22 @@ namespace QuanLyKho
             txtGhiChu = new TextBox { Location = new Point(110, y), Size = new Size(controlWidth, 50), Multiline = true };
             phieuNhapPanel.Controls.AddRange(new Control[] { lblGhiChu, txtGhiChu });
 
+            // Di chuyển nhãn và ô tìm kiếm nằm cùng một dòng
+            y += spacing + 50;
+            lblTimKiemMaPhieu = new Label { Text = "Tìm kiếm mã phiếu:", Location = new Point(10, y), Size = new Size(100, 20) };
+            txtTimKiemMaPhieu = new TextBox { Location = new Point(110, y), Size = new Size(180, 25) };
+            txtTimKiemMaPhieu.TextChanged += TxtTimKiem_TextChanged;
+            phieuNhapPanel.Controls.AddRange(new Control[] { lblTimKiemMaPhieu, txtTimKiemMaPhieu });
+
             // Buttons
             y += spacing + 40;
             var buttonWidth = 80;
-            btnThem = new Button { Text = "Thêm", Location = new Point(10, y), Size = new Size(buttonWidth, 30) };
-            btnSua = new Button { Text = "Sửa", Location = new Point(100, y), Size = new Size(buttonWidth, 30) };
-            btnXoa = new Button { Text = "Xóa", Location = new Point(190, y), Size = new Size(buttonWidth, 30) };
+            btnThem = new Button { Text = "Thêm", Location = new Point(10, 340), Size = new Size(buttonWidth, 30) };
+            btnSua = new Button { Text = "Sửa", Location = new Point(100, 340), Size = new Size(buttonWidth, 30) };
+            btnXoa = new Button { Text = "Xóa", Location = new Point(190, 340), Size = new Size(buttonWidth, 30) };
             
             y += 40;
-            btnLuu = new Button { Text = "Lưu", Location = new Point(100, y), Size = new Size(buttonWidth, 30), Enabled = false };
+            btnLuu = new Button { Text = "Lưu", Location = new Point(10, 380), Size = new Size(buttonWidth, 30), Enabled = false };
             
             phieuNhapPanel.Controls.AddRange(new Control[] { btnThem, btnSua, btnXoa, btnLuu });
 
@@ -395,6 +408,27 @@ namespace QuanLyKho
             btnSua.Enabled = !isEditing;
             btnXoa.Enabled = !isEditing;
             btnLuu.Enabled = isEditing;
+        }
+
+        private void TxtTimKiem_TextChanged(object sender, EventArgs e)
+        {
+            string maPhieu = txtTimKiemMaPhieu.Text.Trim();
+
+            // Câu lệnh SQL để tìm kiếm
+            var query = @"
+                SELECT pn.MaPhieu, pn.NgayNhap, ncc.TenNCC, pn.GhiChu, pn.TongTien
+                FROM [dbo].[Phieu_Nhap] pn
+                LEFT JOIN [dbo].[Nha_Cung_Cap] ncc ON pn.MaNCC = ncc.MaNCC
+                WHERE pn.MaPhieu LIKE @MaPhieu
+            ";
+
+            using (var cmd = new SqlCommand(query, connection))
+            {
+                cmd.Parameters.AddWithValue("@MaPhieu", string.IsNullOrEmpty(maPhieu) ? (object)DBNull.Value : "%" + maPhieu + "%");
+                var dt = new DataTable();
+                dt.Load(cmd.ExecuteReader());
+                dgvPhieuNhap.DataSource = dt; // Cập nhật DataGridView
+            }
         }
     }
 }

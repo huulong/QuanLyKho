@@ -22,16 +22,37 @@ namespace QuanLyKho
         {
             // Tiêu đề form
             this.Text = "Đăng Ký Tài Khoản";
-            this.Size = new System.Drawing.Size(400, 300);
+            this.Size = new System.Drawing.Size(400, 400);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
+
+            // Label chính
+            Label lblTitle = new Label
+            {
+                Text = "ĐĂNG KÝ TÀI KHOẢN MỚI",
+                Location = new System.Drawing.Point(30, 20),
+                Size = new System.Drawing.Size(340, 30),
+                Font = new System.Drawing.Font("Arial", 14, System.Drawing.FontStyle.Bold),
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+            };
+            this.Controls.Add(lblTitle);
+
+            // Label hướng dẫn
+            Label lblGuide = new Label
+            {
+                Text = "Vui lòng điền đầy đủ thông tin để đăng ký tài khoản mới",
+                Location = new System.Drawing.Point(30, 60),
+                Size = new System.Drawing.Size(340, 20),
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+            };
+            this.Controls.Add(lblGuide);
 
             // Nhãn Tên Đăng Nhập
             Label lblTenDangNhap = new Label
             {
                 Text = "Tên Đăng Nhập:",
-                Location = new System.Drawing.Point(30, 50),
+                Location = new System.Drawing.Point(30, 100),
                 Size = new System.Drawing.Size(120, 25)
             };
             this.Controls.Add(lblTenDangNhap);
@@ -39,7 +60,7 @@ namespace QuanLyKho
             // Ô Nhập Tên Đăng Nhập
             txtTenDangNhap = new TextBox
             {
-                Location = new System.Drawing.Point(160, 50),
+                Location = new System.Drawing.Point(160, 100),
                 Size = new System.Drawing.Size(200, 25),
                 Name = "txtTenDangNhap"
             };
@@ -49,7 +70,7 @@ namespace QuanLyKho
             Label lblMatKhau = new Label
             {
                 Text = "Mật Khẩu:",
-                Location = new System.Drawing.Point(30, 90),
+                Location = new System.Drawing.Point(30, 140),
                 Size = new System.Drawing.Size(120, 25)
             };
             this.Controls.Add(lblMatKhau);
@@ -57,7 +78,7 @@ namespace QuanLyKho
             // Ô Nhập Mật Khẩu
             txtMatKhau = new TextBox
             {
-                Location = new System.Drawing.Point(160, 90),
+                Location = new System.Drawing.Point(160, 140),
                 Size = new System.Drawing.Size(200, 25),
                 PasswordChar = '*',
                 Name = "txtMatKhau"
@@ -68,7 +89,7 @@ namespace QuanLyKho
             Label lblMaNV = new Label
             {
                 Text = "Mã Nhân Viên:",
-                Location = new System.Drawing.Point(30, 130),
+                Location = new System.Drawing.Point(30, 180),
                 Size = new System.Drawing.Size(120, 25)
             };
             this.Controls.Add(lblMaNV);
@@ -76,21 +97,46 @@ namespace QuanLyKho
             // Ô Nhập Mã Nhân Viên
             txtMaNV = new TextBox
             {
-                Location = new System.Drawing.Point(160, 130),
+                Location = new System.Drawing.Point(160, 180),
                 Size = new System.Drawing.Size(200, 25),
                 Name = "txtMaNV"
             };
             this.Controls.Add(txtMaNV);
 
+            // Label ghi chú
+            Label lblNote = new Label
+            {
+                Text = "Lưu ý: Mã nhân viên phải là mã hợp lệ trong hệ thống",
+                Location = new System.Drawing.Point(30, 220),
+                Size = new System.Drawing.Size(340, 20),
+                ForeColor = System.Drawing.Color.Red,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+            };
+            this.Controls.Add(lblNote);
+
             // Nút Đăng Ký
             Button btnDangKy = new Button
             {
                 Text = "Đăng Ký",
-                Location = new System.Drawing.Point(130, 200),
-                Size = new System.Drawing.Size(120, 30)
+                Location = new System.Drawing.Point(130, 260),
+                Size = new System.Drawing.Size(140, 35),
+                BackColor = System.Drawing.Color.FromArgb(0, 122, 204),
+                ForeColor = System.Drawing.Color.White,
+                Font = new System.Drawing.Font("Arial", 10, System.Drawing.FontStyle.Bold)
             };
             btnDangKy.Click += BtnDangKy_Click;
             this.Controls.Add(btnDangKy);
+
+            // Link quay lại đăng nhập
+            LinkLabel lnkBackToLogin = new LinkLabel
+            {
+                Text = "Đã có tài khoản? Đăng nhập ngay",
+                Location = new System.Drawing.Point(100, 310),
+                Size = new System.Drawing.Size(200, 25),
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+            };
+            lnkBackToLogin.Click += (sender, e) => this.Close();
+            this.Controls.Add(lnkBackToLogin);
         }
 
         // Phương thức mã hóa mật khẩu đơn giản
@@ -100,7 +146,7 @@ namespace QuanLyKho
             {
                 // Chuyển đổi mật khẩu thành mảng byte
                 byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(matKhau));
-                
+
                 // Chuyển đổi mảng byte thành chuỗi hex
                 StringBuilder builder = new StringBuilder();
                 for (int i = 0; i < bytes.Length; i++)
@@ -135,7 +181,7 @@ namespace QuanLyKho
                 {
                     // Kiểm tra xem nhân viên có tồn tại không
                     string checkNhanVienQuery = "SELECT COUNT(*) FROM TT_Nhan_Vien WHERE MaNV = @MaNV";
-                    
+
                     using (SqlCommand checkCommand = new SqlCommand(checkNhanVienQuery, connection))
                     {
                         // Chuyển đổi mã nhân viên sang số nguyên
@@ -176,7 +222,7 @@ namespace QuanLyKho
                     string insertQuery = @"
                         INSERT INTO Tai_Khoan (TK, MaNV, MatKhau) 
                         VALUES (@TenDangNhap, @MaNV, @MatKhau)";
-                    
+
                     using (SqlCommand command = new SqlCommand(insertQuery, connection))
                     {
                         command.Parameters.AddWithValue("@TenDangNhap", txtTenDangNhap.Text);

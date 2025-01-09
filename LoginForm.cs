@@ -7,13 +7,13 @@ using System.Text;
 
 namespace QuanLyKho
 {
-    public partial class DangNhapForm : Form
+    public partial class LoginForm : Form
     {
         private TextBox txtTenDangNhap;
         private TextBox txtMatKhau;
         private int loginAttempts = 0;
 
-        public DangNhapForm()
+        public LoginForm()
         {
             InitializeComponent();
         }
@@ -177,7 +177,7 @@ namespace QuanLyKho
                 {
                     string hashedPassword = MaHoaMatKhau(txtMatKhau.Text);
                     string query = @"
-                        SELECT tk.MaNV, nv.TenNV
+                        SELECT tk.MaNV, nv.HoTen, nv.ChucVu
                         FROM Tai_Khoan tk
                         JOIN TT_Nhan_Vien nv ON tk.MaNV = nv.MaNV
                         WHERE tk.TK = @TenDangNhap AND tk.MatKhau = @MatKhau";
@@ -192,15 +192,16 @@ namespace QuanLyKho
                             if (reader.Read())
                             {
                                 int maNV = reader.GetInt32(0);
-                                string tenNV = reader.GetString(1);
+                                string hoTen = reader.GetString(1);
+                                string chucVu = reader.GetString(2);
                                 
                                 MessageBox.Show(
-                                    $"Xin chào {tenNV}!\n\nChúc bạn làm việc hiệu quả!", 
+                                    $"Xin chào {hoTen}!\nChức vụ: {chucVu}\n\nChúc bạn làm việc hiệu quả!", 
                                     "Đăng nhập thành công ✓", 
                                     MessageBoxButtons.OK, 
                                     MessageBoxIcon.Information);
                                 
-                                var mainForm = new TrangChuForm(tenNV, maNV);
+                                var mainForm = new TrangChuForm(hoTen, maNV);
                                 this.Hide();
                                 mainForm.FormClosed += (s, args) => this.Close();
                                 mainForm.Show();

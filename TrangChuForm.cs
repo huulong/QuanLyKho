@@ -72,6 +72,17 @@ namespace QuanLyKho
             btnQuanLyNguoiDung.Click += BtnQuanLyNguoiDung_Click;
             this.Controls.Add(btnQuanLyNguoiDung);
 
+            // Thêm nút Quản lý khách hàng
+            Button btnQuanLyKhachHang = new Button
+            {
+                Text = "Quản Lý\nKhách Hàng",
+                Size = new Size(100, 50),
+                Location = new Point(20, 480),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            btnQuanLyKhachHang.Click += BtnQuanLyKhachHang_Click;
+            this.Controls.Add(btnQuanLyKhachHang);
+
             ResumeLayout(false);
         }
 
@@ -795,6 +806,12 @@ namespace QuanLyKho
             {
                 MessageBox.Show($"Lỗi: {ex.Message}\nStack: {ex.StackTrace}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void BtnQuanLyKhachHang_Click(object sender, EventArgs e)
+        {
+            var khachHangForm = new KhachHangForm();
+            khachHangForm.ShowDialog();
         }
     }
 }

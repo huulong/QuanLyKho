@@ -19,6 +19,8 @@ namespace QuanLyKho
         private TextBox txtSDT;
         private TextBox txtEmail;
         private Label lblStatus;
+        private TextBox txtTimKiem;
+        private Label lblTimKiem;
 
         public NhaCungCapForm()
         {
@@ -90,6 +92,13 @@ namespace QuanLyKho
             var lblEmail = new Label { Text = "Email:", Location = new Point(10, y), Size = new Size(labelWidth, 20) };
             txtEmail = new TextBox { Location = new Point(90, y), Size = new Size(controlWidth, 25) };
             inputPanel.Controls.AddRange(new Control[] { lblEmail, txtEmail });
+
+            // Tìm kiếm
+            y += spacing;
+            lblTimKiem = new Label { Text = "Tìm kiếm:", Location = new Point(10, y), Size = new Size(labelWidth, 20) };
+            txtTimKiem = new TextBox { Location = new Point(90, y), Size = new Size(controlWidth, 25) };
+            txtTimKiem.TextChanged += TxtTimKiem_TextChanged;
+            inputPanel.Controls.AddRange(new Control[] { lblTimKiem, txtTimKiem });
 
             // Buttons
             y += spacing + 20;
@@ -283,6 +292,30 @@ namespace QuanLyKho
             btnSua.Enabled = !isEditing;
             btnXoa.Enabled = !isEditing;
             btnLuu.Enabled = isEditing;
+        }
+
+        private void TxtTimKiem_TextChanged(object sender, EventArgs e)
+        {
+            string searchValue = txtTimKiem.Text.Trim();
+
+            using (SqlConnection connection = DatabaseConnection.GetConnection())
+            {
+                string query = @"
+                    SELECT * FROM [dbo].[Nha_Cung_Cap]
+                    WHERE MaNCC LIKE @SearchValue
+                    OR TenNCC LIKE @SearchValue
+                    OR DiaChi LIKE @SearchValue
+                    OR SDT LIKE @SearchValue
+                    OR Email LIKE @SearchValue";
+
+                using (SqlCommand command = new SqlCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@SearchValue", "%" + searchValue + "%");
+                    var dt = new DataTable();
+                    dt.Load(command.ExecuteReader());
+                    dgvNhaCungCap.DataSource = dt;
+                }
+            }
         }
     }
 }
