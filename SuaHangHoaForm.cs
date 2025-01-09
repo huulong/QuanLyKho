@@ -15,7 +15,7 @@ namespace QuanLyKho
             _components = new Container();
             _maVatTu = maVatTu;
             InitializeComponent();
-            LoadHangHoaInfo();
+            LoadVatTuInfo();
         }
 
         private void InitializeComponent()
@@ -103,7 +103,7 @@ namespace QuanLyKho
             this.Controls.Add(btnSua);
 
             // Cấu hình Form
-            this.Text = "Sửa Hàng Hóa";
+            this.Text = "Sửa Vật Tư";
             this.Size = new System.Drawing.Size(400, 320);
             this.StartPosition = FormStartPosition.CenterScreen;
 
@@ -126,10 +126,7 @@ namespace QuanLyKho
                         {
                             while (reader.Read())
                             {
-                                cbDonViTinh.Items.Add(new KeyValuePair<int, string>(
-                                    Convert.ToInt32(reader["MaDVT"]), 
-                                    reader["TenDVT"].ToString()
-                                ));
+                                cbDonViTinh.Items.Add(new KeyValuePair<int, string>(Convert.ToInt32(reader["MaDVT"]), reader["TenDVT"].ToString()));
                             }
                         }
                     }
@@ -157,10 +154,7 @@ namespace QuanLyKho
                         {
                             while (reader.Read())
                             {
-                                cbNhaCungCap.Items.Add(new KeyValuePair<int, string>(
-                                    Convert.ToInt32(reader["MaNCC"]), 
-                                    reader["TenNCC"].ToString()
-                                ));
+                                cbNhaCungCap.Items.Add(new KeyValuePair<int, string>(Convert.ToInt32(reader["MaNCC"]), reader["TenNCC"].ToString()));
                             }
                         }
                     }
@@ -174,7 +168,7 @@ namespace QuanLyKho
             }
         }
 
-        private void LoadHangHoaInfo()
+        private void LoadVatTuInfo()
         {
             try
             {
@@ -287,12 +281,12 @@ namespace QuanLyKho
                         
                         if (rowsAffected > 0)
                         {
-                            MessageBox.Show("Sửa hàng hóa thành công.", "Thông Báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            MessageBox.Show("Sửa vật tư thành công.", "Thông Báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
                             this.Close();
                         }
                         else
                         {
-                            MessageBox.Show("Không thể sửa hàng hóa.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            MessageBox.Show("Không thể sửa vật tư.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         }
                     }
                 }

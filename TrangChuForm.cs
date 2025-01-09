@@ -157,14 +157,14 @@ namespace QuanLyKho
                     connection.Open();
                     var queries = new[]
                     {
-                        "SELECT COUNT(*) FROM [dbo].[VatTu]",
-                        "SELECT COUNT(*) FROM [dbo].[Phieu_Nhap] WHERE MONTH(NgayNhapHang) = MONTH(GETDATE()) AND YEAR(NgayNhapHang) = YEAR(GETDATE())",
-                        "SELECT COUNT(*) FROM [dbo].[Phieu_Xuat] WHERE MONTH(NgayXuatHang) = MONTH(GETDATE()) AND YEAR(NgayXuatHang) = YEAR(GETDATE())"
+                        "SELECT COUNT(*) FROM [dbo].[Hang_Hoa]",
+                        "SELECT COUNT(*) FROM [dbo].[Phieu_Nhap] WHERE MONTH(NgayNhap) = MONTH(GETDATE()) AND YEAR(NgayNhap) = YEAR(GETDATE())",
+                        "SELECT COUNT(*) FROM [dbo].[Phieu_Xuat] WHERE MONTH(NgayXuat) = MONTH(GETDATE()) AND YEAR(NgayXuat) = YEAR(GETDATE())"
                     };
 
                     var labels = new[] 
                     { 
-                        "Tổng Vật Tư", 
+                        "Tổng Hàng Hóa", 
                         "Phiếu Nhập Tháng", 
                         "Phiếu Xuất Tháng" 
                     };
@@ -182,7 +182,6 @@ namespace QuanLyKho
                         {
                             using (var cmd = new SqlCommand(queries[i], connection))
                             {
-                                cmd.CommandTimeout = 30; // 30 giây
                                 var value = Convert.ToInt32(cmd.ExecuteScalar());
                                 stats.Add((labels[i], value, colors[i]));
                             }
@@ -200,7 +199,7 @@ namespace QuanLyKho
                 System.Diagnostics.Debug.WriteLine($"Lỗi khi lấy thống kê: {ex.Message}");
                 stats = new List<(string, int, Color)>
                 {
-                    ("Tổng Vật Tư", 0, Color.FromArgb(33, 150, 243)),
+                    ("Tổng Hàng Hóa", 0, Color.FromArgb(33, 150, 243)),
                     ("Phiếu Nhập Tháng", 0, Color.FromArgb(76, 175, 80)),
                     ("Phiếu Xuất Tháng", 0, Color.FromArgb(255, 152, 0))
                 };
@@ -540,32 +539,36 @@ namespace QuanLyKho
                     var query = @"
                         WITH ThongKeNhap AS (
                             SELECT 
-                                COUNT(DISTINCT MaPhieuNhap) as SoLuongPhieu,
-                                SUM(SoLuong) as TongSoLuong,
-                                SUM(ThanhTien) as TongGiaTri
-                            FROM Phieu_Nhap
-                            WHERE NgayNhapHang BETWEEN @StartDate AND @EndDate
+                                pn.MaPhieu,
+                                SUM(ISNULL(ct.SoLuong, 0)) as TongSoLuong,
+                                SUM(ISNULL(pn.TongTien, 0)) as TongGiaTri
+                            FROM Phieu_Nhap pn
+                            LEFT JOIN Chi_Tiet_Phieu_Nhap ct ON pn.MaPhieu = ct.MaPhieu
+                            WHERE pn.NgayNhap BETWEEN @StartDate AND @EndDate
+                            GROUP BY pn.MaPhieu
                         ),
                         ThongKeXuat AS (
                             SELECT 
-                                COUNT(DISTINCT MaPhieuXuat) as SoLuongPhieu,
-                                SUM(SoLuong) as TongSoLuong,
-                                SUM(ThanhTien) as TongGiaTri
-                            FROM Phieu_Xuat
-                            WHERE NgayXuatHang BETWEEN @StartDate AND @EndDate
+                                px.MaPhieu,
+                                SUM(ISNULL(ct.SoLuong, 0)) as TongSoLuong,
+                                SUM(ISNULL(px.TongTien, 0)) as TongGiaTri
+                            FROM Phieu_Xuat px
+                            LEFT JOIN Chi_Tiet_Phieu_Xuat ct ON px.MaPhieu = ct.MaPhieu
+                            WHERE px.NgayXuat BETWEEN @StartDate AND @EndDate
+                            GROUP BY px.MaPhieu
                         )
                         SELECT 
                             'Nhập' as LoaiPhieu,
-                            ISNULL(SoLuongPhieu, 0) as SoLuongPhieu,
-                            ISNULL(TongSoLuong, 0) as TongSoLuong,
-                            ISNULL(TongGiaTri, 0) as TongGiaTri
+                            COUNT(*) as SoLuongPhieu,
+                            SUM(TongSoLuong) as TongSoLuong,
+                            SUM(TongGiaTri) as TongGiaTri
                         FROM ThongKeNhap
                         UNION ALL
                         SELECT 
                             'Xuất' as LoaiPhieu,
-                            ISNULL(SoLuongPhieu, 0) as SoLuongPhieu,
-                            ISNULL(TongSoLuong, 0) as TongSoLuong,
-                            ISNULL(TongGiaTri, 0) as TongGiaTri
+                            COUNT(*) as SoLuongPhieu,
+                            SUM(TongSoLuong) as TongSoLuong,
+                            SUM(TongGiaTri) as TongGiaTri
                         FROM ThongKeXuat";
 
                     using (var command = new SqlCommand(query, connection))
@@ -581,8 +584,8 @@ namespace QuanLyKho
                             {
                                 string loaiPhieu = reader["LoaiPhieu"].ToString();
                                 int soLuongPhieu = Convert.ToInt32(reader["SoLuongPhieu"]);
-                                int tongSoLuong = Convert.ToInt32(reader["TongSoLuong"]);
-                                decimal tongGiaTri = Convert.ToDecimal(reader["TongGiaTri"]);
+                                int tongSoLuong = reader["TongSoLuong"] == DBNull.Value ? 0 : Convert.ToInt32(reader["TongSoLuong"]);
+                                decimal tongGiaTri = reader["TongGiaTri"] == DBNull.Value ? 0 : Convert.ToDecimal(reader["TongGiaTri"]);
 
                                 message += $"Phiếu {loaiPhieu}:\n";
                                 message += $"- Số lượng phiếu: {soLuongPhieu:N0}\n";
@@ -607,56 +610,48 @@ namespace QuanLyKho
                 DatabaseConnection.ExecuteInTransaction((connection, transaction) =>
                 {
                     var query = @"
-                        WITH TongNhap AS (
-                            SELECT 
-                                MaVatTu,
-                                SUM(SoLuong) as SoLuongNhap
-                            FROM Phieu_Nhap
-                            GROUP BY MaVatTu
-                        ),
-                        TongXuat AS (
-                            SELECT 
-                                MaVatTu,
-                                SUM(SoLuong) as SoLuongXuat
-                            FROM Phieu_Xuat
-                            GROUP BY MaVatTu
-                        )
                         SELECT 
-                            v.TenVT,
+                            hh.MaHang,
+                            hh.TenHang,
                             dvt.TenDVT,
-                            ncc.TenNCC,
-                            ISNULL(tn.SoLuongNhap, 0) as TongNhap,
-                            ISNULL(tx.SoLuongXuat, 0) as TongXuat,
-                            ISNULL(tn.SoLuongNhap, 0) - ISNULL(tx.SoLuongXuat, 0) as TonKho
-                        FROM VatTu v
-                        LEFT JOIN Don_Vi_Tinh dvt ON v.MaDVT = dvt.MaDVT
-                        LEFT JOIN Nha_Cung_Cap ncc ON v.MaNCC = ncc.MaNCC
-                        LEFT JOIN TongNhap tn ON v.MaVatTu = tn.MaVatTu
-                        LEFT JOIN TongXuat tx ON v.MaVatTu = tx.MaVatTu
-                        ORDER BY v.TenVT";
+                            hh.SoLuongTon,
+                            hh.GiaNhap,
+                            hh.GiaXuat,
+                            (hh.SoLuongTon * hh.GiaNhap) as GiaTriTon
+                        FROM Hang_Hoa hh
+                        LEFT JOIN Don_Vi_Tinh dvt ON hh.MaDVT = dvt.MaDVT
+                        WHERE hh.SoLuongTon > 0
+                        ORDER BY hh.SoLuongTon DESC";
 
                     using (var command = new SqlCommand(query, connection))
                     {
                         command.Transaction = transaction;
                         using (var reader = command.ExecuteReader())
                         {
-                            string message = "Báo Cáo Tồn Kho\n\n";
+                            string message = "BÁO CÁO TỒN KHO\n\n";
+                            decimal tongGiaTriTon = 0;
+                            int stt = 1;
+
                             while (reader.Read())
                             {
-                                string tenVT = reader["TenVT"].ToString();
+                                string maHang = reader["MaHang"].ToString();
+                                string tenHang = reader["TenHang"].ToString();
                                 string dvt = reader["TenDVT"].ToString();
-                                string ncc = reader["TenNCC"].ToString();
-                                int tongNhap = Convert.ToInt32(reader["TongNhap"]);
-                                int tongXuat = Convert.ToInt32(reader["TongXuat"]);
-                                int tonKho = Convert.ToInt32(reader["TonKho"]);
+                                int soLuongTon = Convert.ToInt32(reader["SoLuongTon"]);
+                                decimal giaNhap = Convert.ToDecimal(reader["GiaNhap"]);
+                                decimal giaTriTon = Convert.ToDecimal(reader["GiaTriTon"]);
 
-                                message += $"{tenVT}:\n";
-                                message += $"- Đơn vị tính: {dvt}\n";
-                                message += $"- Nhà cung cấp: {ncc}\n";
-                                message += $"- Tổng nhập: {tongNhap:N0}\n";
-                                message += $"- Tổng xuất: {tongXuat:N0}\n";
-                                message += $"- Tồn kho: {tonKho:N0}\n\n";
+                                message += $"{stt}. {tenHang} ({maHang})\n";
+                                message += $"   - Đơn vị tính: {dvt}\n";
+                                message += $"   - Số lượng tồn: {soLuongTon:N0}\n";
+                                message += $"   - Giá nhập: {giaNhap:N0} VNĐ\n";
+                                message += $"   - Giá trị tồn: {giaTriTon:N0} VNĐ\n\n";
+
+                                tongGiaTriTon += giaTriTon;
+                                stt++;
                             }
+
+                            message += $"Tổng giá trị tồn kho: {tongGiaTriTon:N0} VNĐ";
                             MessageBox.Show(message, "Báo Cáo Tồn Kho", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         }
                     }
@@ -664,67 +659,60 @@ namespace QuanLyKho
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Lỗi khi lấy báo cáo: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Lỗi khi lấy báo cáo tồn kho: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private void BtnBaoCaoDoanhThu_Click(object sender, EventArgs e)
         {
-            var startDate = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
-            var endDate = startDate.AddMonths(1).AddDays(-1);
-
             try
             {
                 DatabaseConnection.ExecuteInTransaction((connection, transaction) =>
                 {
                     var query = @"
-                        WITH DoanhThuNgay AS (
+                        WITH DoanhThuThang AS (
                             SELECT 
-                                NgayXuatHang,
-                                COUNT(DISTINCT MaPhieuXuat) as SoPhieuXuat,
-                                SUM(SoLuong) as TongSoLuong,
-                                SUM(ThanhTien) as DoanhThu
+                                MONTH(NgayXuat) as Thang,
+                                YEAR(NgayXuat) as Nam,
+                                COUNT(DISTINCT MaPhieu) as SoPhieuXuat,
+                                SUM(TongTien) as DoanhThu
                             FROM Phieu_Xuat
-                            WHERE NgayXuatHang BETWEEN @StartDate AND @EndDate
-                            GROUP BY NgayXuatHang
+                            WHERE YEAR(NgayXuat) = YEAR(GETDATE())
+                            GROUP BY MONTH(NgayXuat), YEAR(NgayXuat)
                         )
                         SELECT 
-                            FORMAT(NgayXuatHang, 'dd/MM/yyyy') as NgayXuat,
+                            Thang,
+                            Nam,
                             SoPhieuXuat,
-                            TongSoLuong,
                             DoanhThu,
-                            SUM(DoanhThu) OVER (ORDER BY NgayXuatHang) as DoanhThuLuyKe
-                        FROM DoanhThuNgay
-                        ORDER BY NgayXuatHang";
+                            SUM(DoanhThu) OVER (ORDER BY Nam, Thang) as DoanhThuLuyKe
+                        FROM DoanhThuThang
+                        ORDER BY Nam, Thang";
 
                     using (var command = new SqlCommand(query, connection))
                     {
                         command.Transaction = transaction;
-                        command.Parameters.AddWithValue("@StartDate", startDate);
-                        command.Parameters.AddWithValue("@EndDate", endDate);
-
                         using (var reader = command.ExecuteReader())
                         {
-                            string message = $"Báo Cáo Doanh Thu Tháng {startDate:MM/yyyy}\n\n";
+                            string message = $"BÁO CÁO DOANH THU NĂM {DateTime.Now.Year}\n\n";
                             decimal tongDoanhThu = 0;
 
                             while (reader.Read())
                             {
-                                string ngayXuat = reader["NgayXuat"].ToString();
+                                int thang = Convert.ToInt32(reader["Thang"]);
                                 int soPhieuXuat = Convert.ToInt32(reader["SoPhieuXuat"]);
-                                int tongSoLuong = Convert.ToInt32(reader["TongSoLuong"]);
                                 decimal doanhThu = Convert.ToDecimal(reader["DoanhThu"]);
                                 decimal doanhThuLuyKe = Convert.ToDecimal(reader["DoanhThuLuyKe"]);
-                                tongDoanhThu += doanhThu;
 
-                                message += $"Ngày {ngayXuat}:\n";
+                                message += $"Tháng {thang}:\n";
                                 message += $"- Số phiếu xuất: {soPhieuXuat:N0}\n";
-                                message += $"- Tổng số lượng: {tongSoLuong:N0}\n";
                                 message += $"- Doanh thu: {doanhThu:N0} VNĐ\n";
                                 message += $"- Doanh thu lũy kế: {doanhThuLuyKe:N0} VNĐ\n\n";
+
+                                tongDoanhThu = doanhThuLuyKe;
                             }
 
-                            message += $"Tổng doanh thu tháng: {tongDoanhThu:N0} VNĐ";
+                            message += $"Tổng doanh thu năm: {tongDoanhThu:N0} VNĐ";
                             MessageBox.Show(message, "Báo Cáo Doanh Thu", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         }
                     }
@@ -732,7 +720,7 @@ namespace QuanLyKho
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Lỗi khi lấy báo cáo: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Lỗi khi lấy báo cáo doanh thu: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
